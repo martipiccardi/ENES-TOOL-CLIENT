@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -:*)",
+      "Bash(python -c \":*)",
+      "Bash(powershell -Command \"Get-Process python | Select-Object Id,CPU,WorkingSet | Sort-Object WorkingSet -Desc | Select-Object -First 5\")"
+    ]
+  }
+}

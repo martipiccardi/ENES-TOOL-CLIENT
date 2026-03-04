@@ -1,0 +1,17 @@
+﻿services:
+  backend:
+    build: ./backend
+    ports:
+      - "8010:8501"
+    volumes:
+      - ./data:/data
+      - ./backend/app:/app/app   # <<< AGGIUNGI QUESTO
+      - ./data:/data
+      - ./backend/app:/app/app
+
+    environment:
+      - DATA_DIR=/data
+      - XLSX_PATH=/data/SUPERDATASETCLEANED.xlsx
+
+
+

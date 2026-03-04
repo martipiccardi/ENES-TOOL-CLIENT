@@ -1,0 +1,5 @@
+*.zip
+__pycache__/
+*.pyc
+.env
+build_index_backup.py

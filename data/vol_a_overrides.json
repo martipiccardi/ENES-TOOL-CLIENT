@@ -1,0 +1,20 @@
+{
+  "_comment": "Manual Vol A match overrides. Format: {wave: {question: [filename, sheet]}}. Use null to force TOC (no Vol A page).",
+  "eb97.2": {
+    "_comment": "QB1-QB9 are Air Quality questions (EBS524). Without override, system incorrectly picks EBS519 (migrants) because it comes first alphabetically.",
+    "QB1": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB1"],
+    "QB2": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB2"],
+    "QB3": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB3"],
+    "QB4": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB4"],
+    "QB5": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB5"],
+    "QB6": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB6"],
+    "QB7": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB7"],
+    "QB8": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB8"],
+    "QB9": ["EB97.2_EBS524_Air Quality_VOL_A.xlsx", "QB9"]
+  },
+  "eb98.2": {
+    "_comment": "QE3 has no plain sheet — maps to QE3_1 (first sub-item). BLOCKINTRO3 is an admin question with no Vol A sheet.",
+    "QE3": ["eb982_vol_A_V8.xlsx", "QE3_1"],
+    "BLOCKINTRO3": null
+  }
+}
