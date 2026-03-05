@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchDistinctValues } from '../api/client'
 
-export default function Sidebar({ filters, onChange }) {
+export default function Sidebar({ filters, onChange, onSearch, textPending }) {
   const [waves, setWaves] = useState([])
   const [qnums, setQnums] = useState([])
 
@@ -55,7 +55,19 @@ export default function Sidebar({ filters, onChange }) {
         type="text"
         value={filters.textSearch}
         onChange={e => set('textSearch', e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') onSearch() }}
       />
+      <button
+        onClick={onSearch}
+        style={{
+          marginTop: 6, width: '100%', padding: '6px 0', cursor: 'pointer',
+          background: textPending ? '#1565c0' : '#1976d2',
+          color: '#fff', border: 'none', borderRadius: 4, fontWeight: 600,
+          fontSize: 13, letterSpacing: 0.3,
+        }}
+      >
+        {textPending ? 'Search ▶' : 'Search'}
+      </button>
 
       <label>Search in</label>
       <select value={filters.searchScope} onChange={e => set('searchScope', e.target.value)}>

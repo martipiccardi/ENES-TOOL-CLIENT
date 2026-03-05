@@ -28,12 +28,12 @@ export default function SearchView() {
   const [filters, setFilters] = useState(() => { const s = loadSession(); return s.filters || DEFAULT_FILTERS })
   const [page, setPage] = useState(() => { const s = loadSession(); return s.page || 1 })
   const [activeTerm, setActiveTerm] = useState(() => { const s = loadSession(); return s.activeTerm || null })
+  const [committedText, setCommittedText] = useState(() => { const s = loadSession(); return s.committedText ?? (s.filters?.textSearch || '') })
 
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [modelReady, setModelReady] = useState(false)
 
-  // Poll /api/model-ready every 3s until the semantic model is loaded
   useEffect(() => {
     if (modelReady) return
     const check = async () => {
@@ -48,12 +48,11 @@ export default function SearchView() {
     return () => clearInterval(id)
   }, [modelReady])
 
-  // Persist state so "Back to search" restores it
   useEffect(() => {
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ filters, page, activeTerm })) } catch {}
-  }, [filters, page, activeTerm])
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ filters, page, activeTerm, committedText })) } catch {}
+  }, [filters, page, activeTerm, committedText])
 
-  const doSearch = useCallback(async (f, p, term) => {
+  const doSearch = useCallback(async (f, p, term, text) => {
     setLoading(true)
     try {
       const data = await fetchSearch({
@@ -62,7 +61,7 @@ export default function SearchView() {
         question_number: f.questionNumber,
         period_from: f.periodFrom,
         period_to: f.periodTo,
-        text_contains: f.textSearch,
+        text_contains: text,
         search_scope: f.searchScope,
         sem_filter: term || '',
         page: p,
@@ -74,17 +73,24 @@ export default function SearchView() {
     }
   }, [])
 
-  // Search on filter/page/term change (debounced)
   useEffect(() => {
-    const t = setTimeout(() => doSearch(filters, page, activeTerm), 300)
+    const t = setTimeout(() => doSearch(filters, page, activeTerm, committedText), 300)
     return () => clearTimeout(t)
-  }, [filters, page, activeTerm, doSearch])
+  }, [filters.wave, filters.questionNumber, filters.periodFrom, filters.periodTo,
+      filters.searchScope, filters.semanticOn, filters.perPage,
+      committedText, page, activeTerm, doSearch])
 
   const handleFiltersChange = (newFilters) => {
     setFilters(newFilters)
     setPage(1)
     setActiveTerm(null)
   }
+
+  const handleSearch = useCallback(() => {
+    setCommittedText(filters.textSearch)
+    setPage(1)
+    setActiveTerm(null)
+  }, [filters.textSearch])
 
   const handleTermClick = (term) => {
     setActiveTerm(term)
@@ -106,19 +112,15 @@ export default function SearchView() {
       question_number: filters.questionNumber,
       period_from: filters.periodFrom,
       period_to: filters.periodTo,
-      text_contains: filters.textSearch,
+      text_contains: committedText,
       search_scope: filters.searchScope,
       sem_filter: activeTerm || '',
     }, fmt)
   }
 
-  // Highlight logic — scope controls which columns get highlighted
-  const hasText = filters.textSearch.trim()
+  const hasText = committedText.trim()
   const relatedTerms = result?.related_terms || []
   const allRelated = relatedTerms.map(t => t.term.toLowerCase())
-
-  // Backend-expanded synonyms (e.g. "farming agriculture agricultural" for "farmers"):
-  // merged into yellow highlights so they don't appear as exact (green) matches.
   const expandedQueryTerms = result?.expanded_query_terms || []
 
   let expandedTerms = []
@@ -127,7 +129,6 @@ export default function SearchView() {
   } else if (filters.semanticOn && hasText) {
     expandedTerms = [...new Set([...allRelated, ...expandedQueryTerms])]
   }
-  // Highlight the full phrase as a single unit — no partial word matches
   const exactTerms = hasText ? [hasText.toLowerCase().trim()] : []
 
   const inQ = filters.searchScope === 'both' || filters.searchScope === 'q'
@@ -140,29 +141,27 @@ export default function SearchView() {
 
   const total = result?.total ?? 0
   const rows = result?.rows ?? []
+  const textPending = filters.textSearch !== committedText
 
   return (
     <div className="app-layout">
-      <Sidebar filters={filters} onChange={handleFiltersChange} />
+      <Sidebar filters={filters} onChange={handleFiltersChange} onSearch={handleSearch} textPending={textPending} />
       <main className="main-content">
         <h1>QUESTION BANK - SEARCH TOOL</h1>
 
-        {/* Model loading banner */}
         {filters.semanticOn && !modelReady && (
           <p style={{
             background: '#fff8e1', border: '1px solid #f9a825', borderRadius: 6,
             padding: '6px 12px', fontSize: 13, color: '#6d4c00', margin: '0 0 8px'
           }}>
-            ⏳ Semantic model loading… first search may take 1–2 min. Subsequent searches are instant.
+            Semantic model loading… first search may take 1–2 min. Subsequent searches are instant.
           </p>
         )}
 
-        {/* Semantic count */}
         {result?.semantic_count > 0 && (
           <p className="caption">Semantic search: {result.semantic_count} related results found</p>
         )}
 
-        {/* Related terms */}
         {filters.semanticOn && hasText && (
           <RelatedTerms
             terms={relatedTerms}
@@ -171,7 +170,6 @@ export default function SearchView() {
           />
         )}
 
-        {/* Waves in period */}
         {result?.waves_in_period?.length > 0 && (
           <>
             <p className="caption">Waves in this period ({result.waves_in_period.length}):</p>
@@ -185,11 +183,9 @@ export default function SearchView() {
           </>
         )}
 
-        {/* Pagination + results header */}
         <Pagination page={page} total={total} perPage={filters.perPage} onPageChange={setPage} />
         <div className="results-header">Results: {total.toLocaleString()}</div>
 
-        {/* Table */}
         {loading ? (
           <div className="loading">Loading…</div>
         ) : (
@@ -204,7 +200,6 @@ export default function SearchView() {
           />
         )}
 
-        {/* Download */}
         <div className="download-row">
           <button className="download-btn" onClick={() => handleDownload('csv')}>
             Download CSV ({total.toLocaleString()} results)
