@@ -1887,140 +1887,91 @@ def _cell_style(col_idx: int, val: str) -> str:
     return base + 'text-align:center'
 
 
+_CHART_JS = """
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+var PALETTE=['#2c5f8a','#3d7ab5','#5a9fd4','#e07b3f','#27ae60','#c0392b','#8e44ad','#f39c12','#16a085','#d35400'];
+var FRENCH_RE=/[\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u00ff]/i;
+function parseTable(tbl){
+  var rows=Array.from(tbl.querySelectorAll('tr'));
+  var colIdx=1,headerRow=0,colLabel='';
+  for(var i=0;i<rows.length;i++){
+    var cells=Array.from(rows[i].querySelectorAll('td'));
+    var idx=cells.findIndex(function(c){return /EU\\s*27|UE\\s*27/i.test(c.textContent);});
+    if(idx!==-1){colIdx=idx;headerRow=i;colLabel='EU27';break;}
+  }
+  if(!colLabel){
+    for(var i=0;i<rows.length;i++){
+      var cells=Array.from(rows[i].querySelectorAll('td'));
+      if(cells.length>1){
+        var val=parseFloat(cells[1]?cells[1].textContent.trim():'');
+        if(!isNaN(val)&&val>=0&&val<=1){headerRow=i;colIdx=1;break;}
+      }
+    }
+  }
+  var labels=[],values=[];
+  for(var r=headerRow+(colLabel?1:0);r<rows.length;r++){
+    var cells=Array.from(rows[r].querySelectorAll('td'));
+    if(cells.length<=colIdx)continue;
+    var label=cells[0]?cells[0].textContent.trim():'';
+    var raw=cells[colIdx]?cells[colIdx].textContent.trim():'';
+    if(!label||!raw||raw==='-')continue;
+    if(FRENCH_RE.test(label))continue;
+    var val=parseFloat(raw);
+    if(isNaN(val)||val<0||val>1)continue;
+    if(/^total/i.test(label))continue;
+    labels.push(label);values.push(Math.round(val*100));
+  }
+  return{labels:labels,values:values,colLabel:colLabel||'%'};
+}
+function renderChart(tblId,canvasId){
+  var tbl=document.getElementById(tblId);
+  var canvas=document.getElementById(canvasId);
+  if(!tbl||!canvas)return;
+  var d=parseTable(tbl);
+  if(!d.labels.length){canvas.style.display='none';return;}
+  var colors=d.labels.map(function(_,i){return PALETTE[i%PALETTE.length];});
+  new Chart(canvas,{
+    type:'bar',
+    data:{labels:d.labels,datasets:[{label:d.colLabel,data:d.values,backgroundColor:colors}]},
+    options:{
+      indexAxis:'y',responsive:true,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.parsed.x+'%';}}}},
+      scales:{x:{min:0,max:100,ticks:{callback:function(v){return v+'%';}}},y:{ticks:{font:{size:10}}}}
+    }
+  });
+}
+</script>
+"""
+
+_CHART_CSS = """
+    .chart-wrap { max-width: 700px; margin: 12px 0 32px; }
+"""
+
 def _build_html(table_rows, wave, question, filename):
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <title>Volume A — Wave {_esc(wave)} / {_esc(question)}</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  {_CHART_JS}
   <style>
-    body {{
-      font-family: Arial, sans-serif;
-      font-size: 11px;
-      padding: 16px;
-      color: #222;
-      background: #fff;
-    }}
+    body {{ font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }}
     h2 {{ color: #2c5f8a; margin-bottom: 4px; }}
     .meta {{ color: #666; font-size: 10px; margin-bottom: 12px; }}
     .scroll-wrap {{ overflow-x: auto; }}
     table {{ border-collapse: collapse; }}
     td {{ vertical-align: top; white-space: pre-wrap; word-break: break-word; }}
     td[rowspan] {{ vertical-align: middle; }}
-    .toggle-bar {{ margin-bottom: 12px; display: flex; gap: 8px; }}
-    .toggle-bar button {{
-      padding: 5px 16px; border: 1px solid #2c5f8a; border-radius: 4px;
-      background: #fff; color: #2c5f8a; cursor: pointer; font-size: 11px;
-    }}
-    .toggle-bar button.active {{
-      background: #2c5f8a; color: #fff;
-    }}
-    #chart-wrap {{ display: none; max-width: 900px; }}
+    {_CHART_CSS}
   </style>
 </head>
 <body>
   <h2>Volume A — Wave {_esc(wave)}, Question {_esc(question)}</h2>
   <p class="meta">Source: {_esc(filename)}</p>
-  <div class="toggle-bar">
-    <button class="active" onclick="showTable()">Table</button>
-    <button onclick="showChart()">Chart (EU27)</button>
-  </div>
-  <div id="table-wrap">
-    <div class="scroll-wrap">
-      <table id="vola-table">{table_rows}</table>
-    </div>
-  </div>
-  <div id="chart-wrap">
-    <canvas id="vola-chart"></canvas>
-  </div>
-  <script>
-    var _chart = null;
-
-    function showTable() {{
-      document.getElementById('table-wrap').style.display = '';
-      document.getElementById('chart-wrap').style.display = 'none';
-      document.querySelectorAll('.toggle-bar button')[0].classList.add('active');
-      document.querySelectorAll('.toggle-bar button')[1].classList.remove('active');
-    }}
-
-    function showChart() {{
-      document.getElementById('table-wrap').style.display = 'none';
-      document.getElementById('chart-wrap').style.display = '';
-      document.querySelectorAll('.toggle-bar button')[0].classList.remove('active');
-      document.querySelectorAll('.toggle-bar button')[1].classList.add('active');
-      if (!_chart) _chart = buildChart();
-    }}
-
-    function buildChart() {{
-      var table = document.getElementById('vola-table');
-      if (!table) return null;
-      var rows = Array.from(table.querySelectorAll('tr'));
-
-      // Find header row containing EU27
-      var eu27Idx = -1;
-      var headerRow = null;
-      for (var i = 0; i < rows.length; i++) {{
-        var cells = Array.from(rows[i].querySelectorAll('td'));
-        var texts = cells.map(function(c) {{ return c.textContent.trim(); }});
-        var idx = texts.findIndex(function(t) {{ return /EU\s*27|UE\s*27/i.test(t); }});
-        if (idx !== -1) {{ eu27Idx = idx; headerRow = i; break; }}
-      }}
-      if (eu27Idx === -1) {{
-        document.getElementById('chart-wrap').innerHTML = '<p style="color:#888">No EU27 column found in this table.</p>';
-        return null;
-      }}
-
-      var labels = [], values = [], colors = [];
-      var palette = ['#2c5f8a','#3d7ab5','#5a9fd4','#7db8e8','#a0cff5',
-                     '#e07b3f','#c0392b','#27ae60','#8e44ad','#f39c12'];
-      var pIdx = 0;
-
-      for (var r = headerRow + 1; r < rows.length; r++) {{
-        var cells = Array.from(rows[r].querySelectorAll('td'));
-        if (cells.length <= eu27Idx) continue;
-        var label = cells[0] ? cells[0].textContent.trim() : '';
-        var raw = cells[eu27Idx] ? cells[eu27Idx].textContent.trim() : '';
-        if (!label || !raw || raw === '-') continue;
-        // French characters heuristic — skip French rows
-        if (/[àâäéèêëîïôùûüçœæÉÈÊËÀÂÄÎÔÙÛÜÇ]/i.test(label)) continue;
-        var val = parseFloat(raw);
-        if (isNaN(val) || val < 0 || val > 1) continue;
-        // Skip "Total" aggregates
-        if (/^total/i.test(label)) continue;
-        labels.push(label);
-        values.push(Math.round(val * 100));
-        colors.push(palette[pIdx % palette.length]);
-        pIdx++;
-      }}
-
-      if (labels.length === 0) {{
-        document.getElementById('chart-wrap').innerHTML = '<p style="color:#888">Could not extract chart data from this table.</p>';
-        return null;
-      }}
-
-      var ctx = document.getElementById('vola-chart').getContext('2d');
-      return new Chart(ctx, {{
-        type: 'bar',
-        data: {{
-          labels: labels,
-          datasets: [{{ label: 'EU27 %', data: values, backgroundColor: colors }}]
-        }},
-        options: {{
-          indexAxis: 'y',
-          responsive: true,
-          plugins: {{
-            legend: {{ display: false }},
-            tooltip: {{ callbacks: {{ label: function(c) {{ return c.parsed.x + '%'; }} }} }}
-          }},
-          scales: {{
-            x: {{ min: 0, max: 100, ticks: {{ callback: function(v) {{ return v + '%'; }} }} }},
-            y: {{ ticks: {{ font: {{ size: 11 }} }} }}
-          }}
-        }}
-      }});
-    }}
-  </script>
+  <div class="scroll-wrap"><table id="tbl-0">{table_rows}</table></div>
+  <div class="chart-wrap"><canvas id="chart-0"></canvas></div>
+  <script>renderChart('tbl-0','chart-0');</script>
 </body>
 </html>"""
 
@@ -2040,7 +1991,7 @@ def _build_html_multi(sections, wave, question, filename):
 <head>
   <meta charset="utf-8"/>
   <title>Volume A — Wave {_esc(wave)} / {_esc(question)}</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  {_CHART_JS}
   <style>
     body {{ font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }}
     h2 {{ color: #2c5f8a; margin-bottom: 4px; }}
@@ -2050,6 +2001,7 @@ def _build_html_multi(sections, wave, question, filename):
     table {{ border-collapse: collapse; }}
     td {{ vertical-align: top; white-space: pre-wrap; word-break: break-word; }}
     td[rowspan] {{ vertical-align: middle; }}
+    {_CHART_CSS}
   </style>
 </head>
 <body>
@@ -2085,40 +2037,6 @@ def _build_html_multi(sections, wave, question, filename):
         if (isNaN(val) || val < 0 || val > 1) continue;
         if (/^total/i.test(label)) continue;
         labels.push(label);
-        values.push(Math.round(val * 100));
-      }}
-      return {{ labels: labels, values: values, hasEU27: eu27Idx !== -1 }};
-    }}
-
-    function renderChart(tblId, canvasId) {{
-      var tbl = document.getElementById(tblId);
-      var canvas = document.getElementById(canvasId);
-      if (!tbl || !canvas) return;
-      var d = parseTable(tbl);
-      if (!d.labels.length) {{ canvas.style.display='none'; return; }}
-      var colors = d.labels.map(function(_,i){{ return PALETTE[i % PALETTE.length]; }});
-      if (d.hasEU27) {{
-        new Chart(canvas, {{
-          type: 'bar',
-          data: {{ labels: d.labels, datasets: [{{ label: 'EU27 %', data: d.values, backgroundColor: colors }}] }},
-          options: {{
-            indexAxis: 'y', responsive: true,
-            plugins: {{ legend: {{ display: false }}, tooltip: {{ callbacks: {{ label: function(c){{ return c.parsed.x+'%'; }} }} }} }},
-            scales: {{ x: {{ min:0, max:100, ticks: {{ callback: function(v){{ return v+'%'; }} }} }}, y: {{ ticks: {{ font: {{ size:10 }} }} }} }}
-          }}
-        }});
-      }} else {{
-        new Chart(canvas, {{
-          type: 'pie',
-          data: {{ labels: d.labels, datasets: [{{ data: d.values, backgroundColor: colors }}] }},
-          options: {{
-            responsive: true,
-            plugins: {{ legend: {{ position: 'right' }}, tooltip: {{ callbacks: {{ label: function(c){{ return c.label+': '+c.parsed+'%'; }} }} }} }}
-          }}
-        }});
-      }}
-    }}
-
     var n = {len(sections)};
     for (var i = 0; i < n; i++) {{ renderChart('tbl-'+i, 'chart-'+i); }}
   </script>
