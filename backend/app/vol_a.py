@@ -1374,22 +1374,17 @@ def render_sheet_as_html(wave: str, question: str) -> str:
                         _match_cache[(fpath, s)][0].upper().startswith(question.upper())]
             if not verified:
                 continue
-            combined_rows = ''
             fname = os.path.basename(fpath)
             is_xlsx = fpath.lower().endswith('.xlsx')
+            sections = ''
             for sname in verified:
                 rows = (_table_rows_xlsx(fpath, sname) if is_xlsx
                         else _table_rows_xls(fpath, sname))
-                combined_rows += (
-                    f'<tr><td colspan="30" style="background:#2c5f8a;color:#fff;'
-                    f'font-weight:bold;padding:4px 8px;font-size:12px;">'
-                    f'{_esc(sname)}'
-                    f'<span style="font-weight:normal;font-size:10px;margin-left:12px;opacity:0.85;">'
-                    f'Source: {_esc(fname)}</span>'
-                    f'</td></tr>\n'
-                    + rows
+                sections += (
+                    f'<h3 style="color:#2c5f8a;margin:24px 0 4px">{_esc(sname)}</h3>'
+                    f'<div class="scroll-wrap"><table>{rows}</table></div>\n'
                 )
-            html = _build_html(combined_rows, wave, question, fname)
+            html = _build_html_multi(sections, wave, question, fname)
             _html_cache[cache_key] = html
             _save_html_to_disk(key, question, html)
             return html
@@ -2029,6 +2024,32 @@ def _build_html(table_rows, wave, question, filename):
       }});
     }}
   </script>
+</body>
+</html>"""
+
+
+def _build_html_multi(sections_html, wave, question, filename):
+    """Render multiple sub-tables (one per sub-sheet) as separate titled sections."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Volume A — Wave {_esc(wave)} / {_esc(question)}</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }}
+    h2 {{ color: #2c5f8a; margin-bottom: 4px; }}
+    h3 {{ color: #2c5f8a; margin: 24px 0 4px; }}
+    .meta {{ color: #666; font-size: 10px; margin-bottom: 12px; }}
+    .scroll-wrap {{ overflow-x: auto; }}
+    table {{ border-collapse: collapse; }}
+    td {{ vertical-align: top; white-space: pre-wrap; word-break: break-word; }}
+    td[rowspan] {{ vertical-align: middle; }}
+  </style>
+</head>
+<body>
+  <h2>Volume A — Wave {_esc(wave)}, Question {_esc(question)}</h2>
+  <p class="meta">Source: {_esc(filename)}</p>
+  {sections_html}
 </body>
 </html>"""
 
