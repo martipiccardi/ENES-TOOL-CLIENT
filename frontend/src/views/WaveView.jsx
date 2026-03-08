@@ -34,6 +34,10 @@ export default function WaveView() {
     }).finally(() => setLoading(false))
   }, [showWaveRaw])
 
+  const handleShowVolA = (wave, question) => {
+    setSearchParams({ show_vol_a: `${wave}___${question}` })
+  }
+
   const handleBack = () => {
     if (hlQParam) {
       setSearchParams({ show_q_waves: hlQParam, show_q_mnemo: hlMnemoParam })
@@ -65,6 +69,7 @@ export default function WaveView() {
           highlightMnemo={hlMnemoParam}
           onShowWave={(w, hash) => setSearchParams({ show_wave: `${w}___${hash}` })}
           onShowQWaves={(q, mnemo) => setSearchParams({ show_q_waves: q, show_q_mnemo: mnemo || '' })}
+          onShowVolA={handleShowVolA}
         />
       )}
 

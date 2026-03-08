@@ -105,6 +105,10 @@ export default function SearchView() {
     setSearchParams({ show_q_waves: question, show_q_mnemo: mnemo || '' })
   }
 
+  const handleShowVolA = (wave, question) => {
+    setSearchParams({ show_vol_a: `${wave}___${question}` })
+  }
+
   const handleDownload = async (fmt) => {
     await downloadResults({
       semantic: filters.semanticOn,
@@ -197,6 +201,7 @@ export default function SearchView() {
             aExpanded={aExpanded}
             onShowWave={handleShowWave}
             onShowQWaves={handleShowQWaves}
+            onShowVolA={handleShowVolA}
           />
         )}
 

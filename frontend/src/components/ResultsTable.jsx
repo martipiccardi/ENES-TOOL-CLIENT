@@ -2,11 +2,7 @@ import { highlightText } from '../utils/highlight'
 
 const VISIBLE_COLS = ['Wave', 'Question Number', 'Mnemo', 'Question(s)', 'Answer(s)', 'FW start date', 'FW end date']
 
-const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api'
-
-export default function ResultsTable({ rows, qExact, qExpanded, aExact, aExpanded, highlightId, highlightQuestion, highlightMnemo, onShowWave, onShowQWaves }) {
+export default function ResultsTable({ rows, qExact, qExpanded, aExact, aExpanded, highlightId, highlightQuestion, highlightMnemo, onShowWave, onShowQWaves, onShowVolA }) {
   if (!rows || rows.length === 0) {
     return <div style={{ padding: '1rem', color: '#888' }}>No results.</div>
   }
@@ -49,7 +45,7 @@ export default function ResultsTable({ rows, qExact, qExpanded, aExact, aExpande
                   )
                 })}
                 <td style={{ background: hlBg, textAlign: 'center' }}>
-                  <ActionCell row={row} onShowWave={onShowWave} onShowQWaves={onShowQWaves} />
+                  <ActionCell row={row} onShowWave={onShowWave} onShowQWaves={onShowQWaves} onShowVolA={onShowVolA} />
                 </td>
               </tr>
             )
@@ -60,7 +56,7 @@ export default function ResultsTable({ rows, qExact, qExpanded, aExact, aExpande
   )
 }
 
-function ActionCell({ row, onShowWave, onShowQWaves }) {
+function ActionCell({ row, onShowWave, onShowQWaves, onShowVolA }) {
   const parts = []
 
   if (row['Wave']?.trim()) {
@@ -76,23 +72,13 @@ function ActionCell({ row, onShowWave, onShowQWaves }) {
   }
 
   if (row['Wave']?.trim() && row['Question Number']?.trim()) {
-    const url = `${API_BASE}/volume-a?wave=${encodeURIComponent(row['Wave'])}&question=${encodeURIComponent(row['Question Number'])}`
     parts.push(
       <button
         key="vola"
         className="wave-action-link"
-        onClick={() => window.open(url, '_blank')}
+        onClick={() => onShowVolA(row['Wave'], row['Question Number'])}
       >
         Show volume A results
-      </button>
-    )
-    parts.push(
-      <button
-        key="vola-charts"
-        className="wave-action-link"
-        onClick={() => window.open(url + '&charts=1', '_blank')}
-      >
-        Show volume A charts
       </button>
     )
   }
