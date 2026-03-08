@@ -50,16 +50,7 @@ def _warmup_vola():
             prerender_all_sheets, _HTML_CACHE_DIR,
         )
         m = get_wave_sheet_map()
-        print(f"[vol_a] Sheet map ready: {len(m)} waves — pre-warming match cache…", flush=True)
-        total_files = 0
-        for file_sheets in m.values():
-            for fpath, sheets in file_sheets.items():
-                try:
-                    _batch_load_match_for_file(fpath, sheets)
-                    total_files += 1
-                except Exception:
-                    pass
-        print(f"[vol_a] Match cache ready: {total_files} files scanned", flush=True)
+        print(f"[vol_a] Sheet map ready: {len(m)} waves — skipping match cache pre-warm (lazy load on demand).", flush=True)
 
         # Only prerender if the disk cache already has entries — on first deployment
         # the disk cache is empty and prerender would block user requests (GIL + CPU).
