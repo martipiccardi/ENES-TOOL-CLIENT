@@ -1376,14 +1376,11 @@ def render_sheet_as_html(wave: str, question: str) -> str:
                 continue
             fname = os.path.basename(fpath)
             is_xlsx = fpath.lower().endswith('.xlsx')
-            sections = ''
+            sections = []
             for sname in verified:
                 rows = (_table_rows_xlsx(fpath, sname) if is_xlsx
                         else _table_rows_xls(fpath, sname))
-                sections += (
-                    f'<h3 style="color:#2c5f8a;margin:24px 0 4px">{_esc(sname)}</h3>'
-                    f'<div class="scroll-wrap"><table>{rows}</table></div>\n'
-                )
+                sections.append((sname, rows))
             html = _build_html_multi(sections, wave, question, fname)
             _html_cache[cache_key] = html
             _save_html_to_disk(key, question, html)
@@ -2028,13 +2025,22 @@ def _build_html(table_rows, wave, question, filename):
 </html>"""
 
 
-def _build_html_multi(sections_html, wave, question, filename):
-    """Render multiple sub-tables (one per sub-sheet) as separate titled sections."""
+def _build_html_multi(sections, wave, question, filename):
+    """Render multiple sub-tables (one per sub-sheet) each with its own chart."""
+    sections_html = ''
+    for i, (sname, table_rows) in enumerate(sections):
+        sections_html += (
+            f'<h3 style="color:#2c5f8a;margin:24px 0 4px">{_esc(sname)}</h3>'
+            f'<div class="scroll-wrap"><table id="tbl-{i}">{table_rows}</table></div>'
+            f'<div style="max-width:700px;margin:12px 0 32px">'
+            f'<canvas id="chart-{i}"></canvas></div>\n'
+        )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <title>Volume A — Wave {_esc(wave)} / {_esc(question)}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <style>
     body {{ font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }}
     h2 {{ color: #2c5f8a; margin-bottom: 4px; }}
@@ -2050,6 +2056,72 @@ def _build_html_multi(sections_html, wave, question, filename):
   <h2>Volume A — Wave {_esc(wave)}, Question {_esc(question)}</h2>
   <p class="meta">Source: {_esc(filename)}</p>
   {sections_html}
+  <script>
+    var PALETTE = ['#2c5f8a','#3d7ab5','#5a9fd4','#e07b3f','#27ae60','#c0392b','#8e44ad','#f39c12','#16a085','#d35400'];
+    var FRENCH_RE = /[àâäéèêëîïôùûüçœæÉÈÊËÀÂÄÎÔÙÛÜÇ]/i;
+
+    function parseTable(tbl) {{
+      var rows = Array.from(tbl.querySelectorAll('tr'));
+      // Find EU27 column
+      var eu27Idx = -1, headerRow = -1;
+      for (var i = 0; i < rows.length; i++) {{
+        var cells = Array.from(rows[i].querySelectorAll('td'));
+        var idx = cells.findIndex(function(c) {{ return /EU\\s*27|UE\\s*27/i.test(c.textContent); }});
+        if (idx !== -1) {{ eu27Idx = idx; headerRow = i; break; }}
+      }}
+
+      var labels = [], values = [];
+      var startRow = headerRow !== -1 ? headerRow + 1 : 0;
+      var colIdx = eu27Idx !== -1 ? eu27Idx : 1;
+
+      for (var r = startRow; r < rows.length; r++) {{
+        var cells = Array.from(rows[r].querySelectorAll('td'));
+        if (cells.length <= colIdx) continue;
+        var label = cells[0] ? cells[0].textContent.trim() : '';
+        var raw = cells[colIdx] ? cells[colIdx].textContent.trim() : '';
+        if (!label || !raw || raw === '-') continue;
+        if (FRENCH_RE.test(label)) continue;
+        var val = parseFloat(raw);
+        if (isNaN(val) || val < 0 || val > 1) continue;
+        if (/^total/i.test(label)) continue;
+        labels.push(label);
+        values.push(Math.round(val * 100));
+      }}
+      return {{ labels: labels, values: values, hasEU27: eu27Idx !== -1 }};
+    }}
+
+    function renderChart(tblId, canvasId) {{
+      var tbl = document.getElementById(tblId);
+      var canvas = document.getElementById(canvasId);
+      if (!tbl || !canvas) return;
+      var d = parseTable(tbl);
+      if (!d.labels.length) {{ canvas.style.display='none'; return; }}
+      var colors = d.labels.map(function(_,i){{ return PALETTE[i % PALETTE.length]; }});
+      if (d.hasEU27) {{
+        new Chart(canvas, {{
+          type: 'bar',
+          data: {{ labels: d.labels, datasets: [{{ label: 'EU27 %', data: d.values, backgroundColor: colors }}] }},
+          options: {{
+            indexAxis: 'y', responsive: true,
+            plugins: {{ legend: {{ display: false }}, tooltip: {{ callbacks: {{ label: function(c){{ return c.parsed.x+'%'; }} }} }} }},
+            scales: {{ x: {{ min:0, max:100, ticks: {{ callback: function(v){{ return v+'%'; }} }} }}, y: {{ ticks: {{ font: {{ size:10 }} }} }} }}
+          }}
+        }});
+      }} else {{
+        new Chart(canvas, {{
+          type: 'pie',
+          data: {{ labels: d.labels, datasets: [{{ data: d.values, backgroundColor: colors }}] }},
+          options: {{
+            responsive: true,
+            plugins: {{ legend: {{ position: 'right' }}, tooltip: {{ callbacks: {{ label: function(c){{ return c.label+': '+c.parsed+'%'; }} }} }} }}
+          }}
+        }});
+      }}
+    }}
+
+    var n = {len(sections)};
+    for (var i = 0; i < n; i++) {{ renderChart('tbl-'+i, 'chart-'+i); }}
+  </script>
 </body>
 </html>"""
 
