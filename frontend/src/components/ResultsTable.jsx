@@ -86,6 +86,15 @@ function ActionCell({ row, onShowWave, onShowQWaves }) {
         Show volume A results
       </button>
     )
+    parts.push(
+      <button
+        key="vola-charts"
+        className="wave-action-link"
+        onClick={() => window.open(url + '&charts=1', '_blank')}
+      >
+        Show volume A charts
+      </button>
+    )
   }
 
   if (row['Question(s)']?.trim()) {

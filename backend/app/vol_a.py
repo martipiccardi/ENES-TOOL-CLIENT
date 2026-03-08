@@ -1960,6 +1960,11 @@ function toggleChart(btn,tblId,canvasId,wrapId){
     if(!_chartDone[canvasId]){renderChart(tblId,canvasId);_chartDone[canvasId]=1;}
   }
 }
+window.addEventListener('load',function(){
+  if(new URLSearchParams(location.search).get('charts')==='1'){
+    document.querySelectorAll('.chart-btn').forEach(function(btn){btn.click();});
+  }
+});
 </script>
 """
 
