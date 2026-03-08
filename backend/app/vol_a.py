@@ -1945,7 +1945,22 @@ function renderChart(tblId,canvasId){
 """
 
 _CHART_CSS = """
-    .chart-wrap { max-width: 700px; margin: 12px 0 32px; }
+    .chart-wrap { max-width: 700px; margin: 8px 0 32px; display: none; }
+    .chart-btn { margin: 6px 0; padding: 4px 14px; font-size: 11px; cursor: pointer; background: #2c5f8a; color: #fff; border: none; border-radius: 3px; }
+    .chart-btn:hover { background: #3d7ab5; }
+"""
+
+_CHART_TOGGLE_JS = """
+<script>
+var _chartDone={};
+function toggleChart(btn,tblId,canvasId,wrapId){
+  var w=document.getElementById(wrapId);
+  if(w.style.display==='block'){w.style.display='none';btn.textContent='Show chart';}
+  else{w.style.display='block';btn.textContent='Hide chart';
+    if(!_chartDone[canvasId]){renderChart(tblId,canvasId);_chartDone[canvasId]=1;}
+  }
+}
+</script>
 """
 
 def _build_html(table_rows, wave, question, filename):
@@ -1955,6 +1970,7 @@ def _build_html(table_rows, wave, question, filename):
   <meta charset="utf-8"/>
   <title>Volume A — Wave {_esc(wave)} / {_esc(question)}</title>
   {_CHART_JS}
+  {_CHART_TOGGLE_JS}
   <style>
     body {{ font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }}
     h2 {{ color: #2c5f8a; margin-bottom: 4px; }}
@@ -1970,21 +1986,21 @@ def _build_html(table_rows, wave, question, filename):
   <h2>Volume A — Wave {_esc(wave)}, Question {_esc(question)}</h2>
   <p class="meta">Source: {_esc(filename)}</p>
   <div class="scroll-wrap"><table id="tbl-0">{table_rows}</table></div>
-  <div class="chart-wrap"><canvas id="chart-0"></canvas></div>
-  <script>renderChart('tbl-0','chart-0');</script>
+  <button class="chart-btn" onclick="toggleChart(this,'tbl-0','chart-0','cwrap-0')">Show chart</button>
+  <div class="chart-wrap" id="cwrap-0"><canvas id="chart-0"></canvas></div>
 </body>
 </html>"""
 
 
 def _build_html_multi(sections, wave, question, filename):
-    """Render multiple sub-tables (one per sub-sheet) each with its own chart."""
+    """Render multiple sub-tables (one per sub-sheet) with optional per-section charts."""
     sections_html = ''
     for i, (sname, table_rows) in enumerate(sections):
         sections_html += (
             f'<h3 style="color:#2c5f8a;margin:24px 0 4px">{_esc(sname)}</h3>'
             f'<div class="scroll-wrap"><table id="tbl-{i}">{table_rows}</table></div>'
-            f'<div style="max-width:700px;margin:12px 0 32px">'
-            f'<canvas id="chart-{i}"></canvas></div>\n'
+            f'<button class="chart-btn" onclick="toggleChart(this,\'tbl-{i}\',\'chart-{i}\',\'cwrap-{i}\')">Show chart</button>'
+            f'<div class="chart-wrap" id="cwrap-{i}"><canvas id="chart-{i}"></canvas></div>\n'
         )
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -1992,6 +2008,7 @@ def _build_html_multi(sections, wave, question, filename):
   <meta charset="utf-8"/>
   <title>Volume A — Wave {_esc(wave)} / {_esc(question)}</title>
   {_CHART_JS}
+  {_CHART_TOGGLE_JS}
   <style>
     body {{ font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }}
     h2 {{ color: #2c5f8a; margin-bottom: 4px; }}
@@ -2008,38 +2025,6 @@ def _build_html_multi(sections, wave, question, filename):
   <h2>Volume A — Wave {_esc(wave)}, Question {_esc(question)}</h2>
   <p class="meta">Source: {_esc(filename)}</p>
   {sections_html}
-  <script>
-    var PALETTE = ['#2c5f8a','#3d7ab5','#5a9fd4','#e07b3f','#27ae60','#c0392b','#8e44ad','#f39c12','#16a085','#d35400'];
-    var FRENCH_RE = /[àâäéèêëîïôùûüçœæÉÈÊËÀÂÄÎÔÙÛÜÇ]/i;
-
-    function parseTable(tbl) {{
-      var rows = Array.from(tbl.querySelectorAll('tr'));
-      // Find EU27 column
-      var eu27Idx = -1, headerRow = -1;
-      for (var i = 0; i < rows.length; i++) {{
-        var cells = Array.from(rows[i].querySelectorAll('td'));
-        var idx = cells.findIndex(function(c) {{ return /EU\\s*27|UE\\s*27/i.test(c.textContent); }});
-        if (idx !== -1) {{ eu27Idx = idx; headerRow = i; break; }}
-      }}
-
-      var labels = [], values = [];
-      var startRow = headerRow !== -1 ? headerRow + 1 : 0;
-      var colIdx = eu27Idx !== -1 ? eu27Idx : 1;
-
-      for (var r = startRow; r < rows.length; r++) {{
-        var cells = Array.from(rows[r].querySelectorAll('td'));
-        if (cells.length <= colIdx) continue;
-        var label = cells[0] ? cells[0].textContent.trim() : '';
-        var raw = cells[colIdx] ? cells[colIdx].textContent.trim() : '';
-        if (!label || !raw || raw === '-') continue;
-        if (FRENCH_RE.test(label)) continue;
-        var val = parseFloat(raw);
-        if (isNaN(val) || val < 0 || val > 1) continue;
-        if (/^total/i.test(label)) continue;
-        labels.push(label);
-    var n = {len(sections)};
-    for (var i = 0; i < n; i++) {{ renderChart('tbl-'+i, 'chart-'+i); }}
-  </script>
 </body>
 </html>"""
 
