@@ -83,7 +83,7 @@ _HTML_CACHE_DIR = os.environ.get(
 # Bump this string whenever the HTML rendering changes (chart buttons, layout, etc.).
 # On startup, if the cache version file doesn't match, all cached HTML is wiped
 # so pages are re-rendered with the new code.
-_HTML_CACHE_VERSION = "v13-multi-charts-bar-5px-2026"
+_HTML_CACHE_VERSION = "v14-bar-9px-2026"
 
 def _check_html_cache_version():
     """Wipe disk HTML cache if the stored version doesn't match _HTML_CACHE_VERSION."""
@@ -2050,7 +2050,7 @@ function renderVolACharts(tblId,pieId,barId){
   }
   if(barCanvas&&d.countries.length){
     var barWrap=barCanvas.parentElement;
-    var h=Math.max(80,d.countries.length*5)+'px';
+    var h=Math.max(120,d.countries.length*9)+'px';
     barWrap.style.height=h;
     barCanvas.style.height=h;
     new Chart(barCanvas,{
