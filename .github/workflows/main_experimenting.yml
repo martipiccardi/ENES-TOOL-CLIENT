@@ -32,19 +32,11 @@ jobs:
           source antenv/bin/activate
           pip install -r requirements.txt
 
-      - name: Download manylinux wheels compatible with Azure
+      - name: Download wheels for Azure
         run: |
           pip install --upgrade pip
-          pip download \
-            --platform manylinux_2_28_x86_64 \
-            --python-version 311 \
-            --implementation cp \
-            --abi cp311 \
-            --only-binary=:all: \
-            -r requirements.txt \
-            -d wheels/
+          pip download -r requirements.txt -d wheels/
           echo "Wheels downloaded: $(ls wheels/ | wc -l)"
-          ls wheels/
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
