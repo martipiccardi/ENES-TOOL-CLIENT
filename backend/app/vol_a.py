@@ -83,7 +83,7 @@ _HTML_CACHE_DIR = os.environ.get(
 # Bump this string whenever the HTML rendering changes (chart buttons, layout, etc.).
 # On startup, if the cache version file doesn't match, all cached HTML is wiped
 # so pages are re-rendered with the new code.
-_HTML_CACHE_VERSION = "v7-smaller-charts-2025"
+_HTML_CACHE_VERSION = "v8-pie-full-bar-small-2025"
 
 def _check_html_cache_version():
     """Wipe disk HTML cache if the stored version doesn't match _HTML_CACHE_VERSION."""
@@ -2117,7 +2117,7 @@ def _chart_block(i):
         f'<button class="chart-btn" onclick="toggleChart(this,\'tbl-{i}\',\'cwrap-{i}\')">Show charts</button>'
         f'<div class="chart-wrap" id="cwrap-{i}">'
         f'  <div class="chart-section"><p class="chart-label">EU27 aggregate</p>'
-        f'  <div style="max-width:260px"><canvas id="pie-{i}"></canvas></div></div>'
+        f'  <div style="max-width:480px"><canvas id="pie-{i}"></canvas></div></div>'
         f'  <div class="chart-section"><p class="chart-label">By country</p>'
         f'  <canvas id="bar-{i}"></canvas></div>'
         f'</div>'
