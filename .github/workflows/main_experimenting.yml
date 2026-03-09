@@ -78,4 +78,4 @@ jobs:
         with:
           app-name: 'Experimenting'
           slot-name: 'Production'
-          
+          startup-command: 'bash /home/site/wwwroot/startup.sh'
