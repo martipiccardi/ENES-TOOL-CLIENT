@@ -83,7 +83,7 @@ _HTML_CACHE_DIR = os.environ.get(
 # Bump this string whenever the HTML rendering changes (chart buttons, layout, etc.).
 # On startup, if the cache version file doesn't match, all cached HTML is wiped
 # so pages are re-rendered with the new code.
-_HTML_CACHE_VERSION = "v3-chart-toggle-2025"
+_HTML_CACHE_VERSION = "v4-pie-stacked-bar-2025"
 
 def _check_html_cache_version():
     """Wipe disk HTML cache if the stored version doesn't match _HTML_CACHE_VERSION."""
@@ -1921,62 +1921,104 @@ def _cell_style(col_idx: int, val: str) -> str:
 _CHART_JS = """
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
-var PALETTE=['#2c5f8a','#3d7ab5','#5a9fd4','#e07b3f','#27ae60','#c0392b','#8e44ad','#f39c12','#16a085','#d35400'];
+var PALETTE=['#2c5f8a','#27ae60','#e67e22','#c0392b','#95a5a6','#3d7ab5','#82e0aa','#f39c12','#8e44ad','#d35400','#1abc9c','#e74c3c'];
 var FRENCH_RE=/[\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u00ff]/i;
-function parseTable(tbl){
+
+function parseVolATable(tblId){
+  var tbl=document.getElementById(tblId);
+  if(!tbl)return null;
   var rows=Array.from(tbl.querySelectorAll('tr'));
-  var colIdx=1,headerRow=0,colLabel='';
+  var eu27Col=-1,headerRowIdx=-1,colHeaders=[];
   for(var i=0;i<rows.length;i++){
     var cells=Array.from(rows[i].querySelectorAll('td'));
-    var idx=cells.findIndex(function(c){return /EU\\s*27|UE\\s*27/i.test(c.textContent);});
-    if(idx!==-1){colIdx=idx;headerRow=i;colLabel='EU27';break;}
-  }
-  if(!colLabel){
-    for(var i=0;i<rows.length;i++){
-      var cells=Array.from(rows[i].querySelectorAll('td'));
-      if(cells.length>1){
-        var val=parseFloat(cells[1]?cells[1].textContent.trim():'');
-        if(!isNaN(val)&&val>=0&&val<=1){headerRow=i;colIdx=1;break;}
-      }
+    var idx=cells.findIndex(function(c){return /EU\\s*27|UE\\s*27/i.test(c.textContent.trim());});
+    if(idx!==-1){
+      eu27Col=idx; headerRowIdx=i;
+      for(var c=1;c<cells.length;c++){var n=cells[c].textContent.trim();if(n)colHeaders.push({idx:c,name:n});}
+      break;
     }
   }
-  var labels=[],values=[];
-  for(var r=headerRow+(colLabel?1:0);r<rows.length;r++){
+  if(headerRowIdx===-1)return null;
+  var answers=[];
+  for(var r=headerRowIdx+1;r<rows.length;r++){
     var cells=Array.from(rows[r].querySelectorAll('td'));
-    if(cells.length<=colIdx)continue;
+    if(!cells.length)continue;
     var label=cells[0]?cells[0].textContent.trim():'';
-    var raw=cells[colIdx]?cells[colIdx].textContent.trim():'';
-    if(!label||!raw||raw==='-')continue;
-    if(FRENCH_RE.test(label))continue;
-    var val=parseFloat(raw);
-    if(isNaN(val)||val<0||val>1)continue;
-    if(/^total/i.test(label))continue;
-    labels.push(label);values.push(Math.round(val*100));
+    if(!label||/^total/i.test(label)||FRENCH_RE.test(label))continue;
+    var eu27Raw=cells[eu27Col]?cells[eu27Col].textContent.trim():'';
+    var eu27Val=parseFloat(eu27Raw);
+    if(isNaN(eu27Val)||eu27Val<0||eu27Val>1)continue;
+    var cVals={};
+    colHeaders.forEach(function(col){
+      var raw=cells[col.idx]?cells[col.idx].textContent.trim():'';
+      var v=parseFloat(raw);
+      cVals[col.name]=isNaN(v)?null:Math.round(v*100);
+    });
+    answers.push({label:label,eu27:Math.round(eu27Val*100),cVals:cVals});
   }
-  return{labels:labels,values:values,colLabel:colLabel||'%'};
+  if(!answers.length)return null;
+  var countries=colHeaders.filter(function(c){return !/EU\\s*27|UE\\s*27/i.test(c.name);}).map(function(c){return c.name;});
+  return{
+    answerLabels:answers.map(function(a){return a.label;}),
+    eu27Data:answers.map(function(a){return a.eu27;}),
+    countries:countries,
+    datasets:answers.map(function(a,i){return{
+      label:a.label,
+      data:countries.map(function(c){return a.cVals[c]!==null&&a.cVals[c]!==undefined?a.cVals[c]:0;}),
+      backgroundColor:PALETTE[i%PALETTE.length]
+    };})
+  };
 }
-function renderChart(tblId,canvasId){
-  var tbl=document.getElementById(tblId);
-  var canvas=document.getElementById(canvasId);
-  if(!tbl||!canvas)return;
-  var d=parseTable(tbl);
-  if(!d.labels.length){canvas.style.display='none';return;}
-  var colors=d.labels.map(function(_,i){return PALETTE[i%PALETTE.length];});
-  new Chart(canvas,{
-    type:'bar',
-    data:{labels:d.labels,datasets:[{label:d.colLabel,data:d.values,backgroundColor:colors}]},
-    options:{
-      indexAxis:'y',responsive:true,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.parsed.x+'%';}}}},
-      scales:{x:{min:0,max:100,ticks:{callback:function(v){return v+'%';}}},y:{ticks:{font:{size:10}}}}
-    }
-  });
+
+function renderVolACharts(tblId,pieId,barId){
+  var d=parseVolATable(tblId);
+  var pieCanvas=document.getElementById(pieId);
+  var barCanvas=document.getElementById(barId);
+  if(!d||!d.answerLabels.length){
+    if(pieCanvas)pieCanvas.closest('.chart-section').style.display='none';
+    if(barCanvas)barCanvas.closest('.chart-section').style.display='none';
+    return;
+  }
+  if(pieCanvas){
+    new Chart(pieCanvas,{
+      type:'pie',
+      data:{
+        labels:d.answerLabels.map(function(l,i){return l+' ('+d.eu27Data[i]+'%)';}),
+        datasets:[{data:d.eu27Data,backgroundColor:PALETTE.slice(0,d.answerLabels.length)}]
+      },
+      options:{responsive:true,maintainAspectRatio:true,
+        plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:12}},
+          tooltip:{callbacks:{label:function(c){return c.label;}}}
+        }
+      }
+    });
+  }
+  if(barCanvas&&d.countries.length){
+    barCanvas.style.height=Math.max(300,d.countries.length*18)+'px';
+    new Chart(barCanvas,{
+      type:'bar',
+      data:{labels:d.countries,datasets:d.datasets},
+      options:{
+        indexAxis:'y',responsive:true,maintainAspectRatio:false,
+        scales:{
+          x:{stacked:true,max:100,ticks:{callback:function(v){return v+'%';},font:{size:9}}},
+          y:{stacked:true,ticks:{font:{size:9}}}
+        },
+        plugins:{
+          legend:{position:'top',labels:{font:{size:10},boxWidth:12}},
+          tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.x+'%';}}}
+        }
+      }
+    });
+  }
 }
 </script>
 """
 
 _CHART_CSS = """
-    .chart-wrap { max-width: 700px; margin: 8px 0 32px; display: none; }
+    .chart-wrap { margin: 8px 0 32px; display: none; }
+    .chart-section { margin-bottom: 20px; }
+    .chart-label { color: #2c5f8a; font-size: 11px; font-weight: bold; margin: 8px 0 4px; }
     .chart-btn { margin: 6px 0; padding: 4px 14px; font-size: 11px; cursor: pointer; background: #2c5f8a; color: #fff; border: none; border-radius: 3px; }
     .chart-btn:hover { background: #3d7ab5; }
 """
@@ -1984,11 +2026,15 @@ _CHART_CSS = """
 _CHART_TOGGLE_JS = """
 <script>
 var _chartDone={};
-function toggleChart(btn,tblId,canvasId,wrapId){
+function toggleChart(btn,tblId,wrapId){
   var w=document.getElementById(wrapId);
-  if(w.style.display==='block'){w.style.display='none';btn.textContent='Show chart';}
-  else{w.style.display='block';btn.textContent='Hide chart';
-    if(!_chartDone[canvasId]){renderChart(tblId,canvasId);_chartDone[canvasId]=1;}
+  if(w.style.display==='block'){w.style.display='none';btn.textContent='Show charts';}
+  else{w.style.display='block';btn.textContent='Hide charts';
+    if(!_chartDone[wrapId]){
+      var n=wrapId.replace('cwrap-','');
+      renderVolACharts(tblId,'pie-'+n,'bar-'+n);
+      _chartDone[wrapId]=1;
+    }
   }
 }
 window.addEventListener('load',function(){
@@ -1999,6 +2045,29 @@ window.addEventListener('load',function(){
 </script>
 """
 
+def _chart_block(i):
+    """Return the toggle button + chart containers for table index i."""
+    return (
+        f'<button class="chart-btn" onclick="toggleChart(this,\'tbl-{i}\',\'cwrap-{i}\')">Show charts</button>'
+        f'<div class="chart-wrap" id="cwrap-{i}">'
+        f'  <div class="chart-section"><p class="chart-label">EU27 aggregate</p>'
+        f'  <div style="max-width:520px"><canvas id="pie-{i}"></canvas></div></div>'
+        f'  <div class="chart-section"><p class="chart-label">By country</p>'
+        f'  <canvas id="bar-{i}"></canvas></div>'
+        f'</div>'
+    )
+
+_PAGE_STYLE = """
+    body { font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }
+    h2 { color: #2c5f8a; margin-bottom: 4px; }
+    h3 { color: #2c5f8a; margin: 24px 0 4px; }
+    .meta { color: #666; font-size: 10px; margin-bottom: 12px; }
+    .scroll-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; }
+    td { vertical-align: top; white-space: pre-wrap; word-break: break-word; }
+    td[rowspan] { vertical-align: middle; }
+"""
+
 def _build_html(table_rows, wave, question, filename):
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -2007,23 +2076,13 @@ def _build_html(table_rows, wave, question, filename):
   <title>Volume A — Wave {_esc(wave)} / {_esc(question)}</title>
   {_CHART_JS}
   {_CHART_TOGGLE_JS}
-  <style>
-    body {{ font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }}
-    h2 {{ color: #2c5f8a; margin-bottom: 4px; }}
-    .meta {{ color: #666; font-size: 10px; margin-bottom: 12px; }}
-    .scroll-wrap {{ overflow-x: auto; }}
-    table {{ border-collapse: collapse; }}
-    td {{ vertical-align: top; white-space: pre-wrap; word-break: break-word; }}
-    td[rowspan] {{ vertical-align: middle; }}
-    {_CHART_CSS}
-  </style>
+  <style>{_PAGE_STYLE}{_CHART_CSS}</style>
 </head>
 <body>
   <h2>Volume A — Wave {_esc(wave)}, Question {_esc(question)}</h2>
   <p class="meta">Source: {_esc(filename)}</p>
   <div class="scroll-wrap"><table id="tbl-0">{table_rows}</table></div>
-  <button class="chart-btn" onclick="toggleChart(this,'tbl-0','chart-0','cwrap-0')">Show chart</button>
-  <div class="chart-wrap" id="cwrap-0"><canvas id="chart-0"></canvas></div>
+  {_chart_block(0)}
 </body>
 </html>"""
 
@@ -2033,10 +2092,9 @@ def _build_html_multi(sections, wave, question, filename):
     sections_html = ''
     for i, (sname, table_rows) in enumerate(sections):
         sections_html += (
-            f'<h3 style="color:#2c5f8a;margin:24px 0 4px">{_esc(sname)}</h3>'
+            f'<h3>{_esc(sname)}</h3>'
             f'<div class="scroll-wrap"><table id="tbl-{i}">{table_rows}</table></div>'
-            f'<button class="chart-btn" onclick="toggleChart(this,\'tbl-{i}\',\'chart-{i}\',\'cwrap-{i}\')">Show chart</button>'
-            f'<div class="chart-wrap" id="cwrap-{i}"><canvas id="chart-{i}"></canvas></div>\n'
+            + _chart_block(i) + '\n'
         )
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -2045,17 +2103,7 @@ def _build_html_multi(sections, wave, question, filename):
   <title>Volume A — Wave {_esc(wave)} / {_esc(question)}</title>
   {_CHART_JS}
   {_CHART_TOGGLE_JS}
-  <style>
-    body {{ font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #222; background: #fff; }}
-    h2 {{ color: #2c5f8a; margin-bottom: 4px; }}
-    h3 {{ color: #2c5f8a; margin: 24px 0 4px; }}
-    .meta {{ color: #666; font-size: 10px; margin-bottom: 12px; }}
-    .scroll-wrap {{ overflow-x: auto; }}
-    table {{ border-collapse: collapse; }}
-    td {{ vertical-align: top; white-space: pre-wrap; word-break: break-word; }}
-    td[rowspan] {{ vertical-align: middle; }}
-    {_CHART_CSS}
-  </style>
+  <style>{_PAGE_STYLE}{_CHART_CSS}</style>
 </head>
 <body>
   <h2>Volume A — Wave {_esc(wave)}, Question {_esc(question)}</h2>
