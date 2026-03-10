@@ -37,9 +37,11 @@ def _warmup_vola():
     """Pre-build Volume A sheet map, text-match cache, and HTML cache (runs in background thread).
 
     HTML prerender strategy:
-    Always pre-renders every Vol A sheet into memory so user requests hit the in-memory
-    cache instantly. If a disk cache entry exists it loads from gzip (fast). Otherwise
-    it parses the Excel file and saves to disk for future restarts.
+    - If the disk HTML cache already exists (previous run), load all sheets from disk into
+      memory — this is fast (gzip reads) and doesn't starve user request threads.
+    - If the disk cache is empty (first deployment or after cache version bump), skip the
+      prerender so the background thread doesn't OOM by parsing all xlsx files at once.
+      The disk cache will be built on-demand as users open Vol A pages.
     """
     import os
     try:
@@ -50,17 +52,25 @@ def _warmup_vola():
         m = get_wave_sheet_map()
         print(f"[vol_a] Sheet map ready: {len(m)} waves — skipping match cache pre-warm (lazy load on demand).", flush=True)
 
-        # Always prerender all sheets in the background so Vol A pages are instant
-        # for users. Runs in a thread executor so it doesn't block the event loop.
-        # If disk cache exists, sheets load from gzip (fast). If not (first deploy
-        # or after a cache version bump), they render from Excel and save to disk.
-        print("[vol_a] Pre-rendering all Vol A sheets in background…", flush=True)
-        rendered, disk_hits, skipped = prerender_all_sheets()
-        print(
-            f"[vol_a] HTML cache ready: {rendered} rendered from Excel, "
-            f"{disk_hits} loaded from disk, {skipped} skipped",
-            flush=True,
+        disk_cache_populated = (
+            os.path.isdir(_HTML_CACHE_DIR)
+            and any(True for _ in __import__('os').walk(_HTML_CACHE_DIR)
+                    if _[2])  # any file exists
         )
+        if disk_cache_populated:
+            print("[vol_a] Disk HTML cache found — loading into memory…", flush=True)
+            rendered, disk_hits, skipped = prerender_all_sheets()
+            print(
+                f"[vol_a] HTML cache ready: {rendered} rendered from Excel, "
+                f"{disk_hits} loaded from disk, {skipped} skipped",
+                flush=True,
+            )
+        else:
+            print(
+                "[vol_a] No disk HTML cache yet — skipping prerender "
+                "(cache will build on-demand as pages are opened).",
+                flush=True,
+            )
     except Exception as e:
         print(f"[vol_a] Warmup failed: {e}", flush=True)
 
