@@ -148,7 +148,7 @@ class _LRUCache:
         if len(self._d) > self._max:
             self._d.popitem(last=False)
 
-_html_cache = _LRUCache(maxsize=80)
+_html_cache = _LRUCache(maxsize=500)
 
 # Cache: {(fpath, sheet_name) -> (label, normalized_text) | None}
 # label = question code extracted from the Excel cell (e.g. 'QB1', 'QA3')
@@ -1077,7 +1077,7 @@ def reload_wave_file_map():
     _text_index = _build_text_index(_wave_sheet_map)
     _save_text_index(_text_index)
     _sheet_eng_cache = {}
-    _html_cache = _LRUCache(maxsize=80)
+    _html_cache = _LRUCache(maxsize=500)
     _match_cache = {}
     _clear_html_disk_cache()
     return _wave_sheet_map
